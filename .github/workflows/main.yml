@@ -1,0 +1,44 @@
+name: CI e CD
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: deploy-devops
+  cancel-in-progress: false
+jobs:
+  publicar:
+    runs-on: [self-hosted, Linux, X64]
+    env:
+      IMAGE: ghcr.io/kal-neves/projeto-devops
+      KUBECONFIG: /home/kollelf/.kube/config
+    steps:
+      - uses: actions/checkout@v4
+      - name: Testes
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements-dev.txt
+          .venv/bin/python -m pytest -q
+          helm lint helm
+      - name: Build e publicação
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export DOCKER_CONFIG=$(mktemp -d)
+          trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker build -t "$IMAGE:${{ github.sha }}" .
+          docker push "$IMAGE:${{ github.sha }}"
+      - name: Deploy
+        env:
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        run: |
+          set -eu
+          test -n "$GHCR_READ_TOKEN"
+          kubectl --context kind-devops create namespace devops --dry-run=client -o yaml | kubectl --context kind-devops apply -f -
+          kubectl --context kind-devops -n devops create secret docker-registry ghcr --docker-server=ghcr.io --docker-username=kal-neves --docker-password="$GHCR_READ_TOKEN" --dry-run=client -o yaml | kubectl --context kind-devops apply -f -
+          helm upgrade --install devops ./helm --kube-context kind-devops -n devops --set image.tag=${{ github.sha }} --set 'imagePullSecrets[0].name=ghcr' --wait --timeout 180s
+          curl --fail --retry 5 --retry-delay 3 http://127.0.0.1:8080/health

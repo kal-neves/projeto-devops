@@ -1,0 +1,4 @@
+image:
+  repository: ghcr.io/kal-neves/projeto-devops
+  tag: local
+imagePullSecrets: []

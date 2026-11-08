@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: filebeat
+  namespace: devops
+data:
+  filebeat.yml: |
+    filebeat.inputs:
+      - type: filestream
+        id: devops-containers
+        prospector.scanner.symlinks: true
+        paths: ['/var/log/containers/devops-*_devops_app-*.log']
+        parsers:
+          - container:
+              stream: all
+              format: auto
+        processors:
+          - decode_json_fields:
+              fields: [message]
+              target: ''
+              overwrite_keys: true
+          - drop_event:
+              when:
+                not:
+                  equals:
+                    service: devops
+    setup.ilm.enabled: false
+    setup.template.name: devops
+    setup.template.pattern: devops-*
+    setup.template.settings:
+      index.number_of_replicas: 0
+    output.elasticsearch:
+      hosts: ['${ELASTICSEARCH_URL}']
+      index: 'devops-%{+yyyy.MM.dd}'
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: filebeat
+  namespace: devops
+spec:
+  selector:
+    matchLabels: {app: filebeat}
+  template:
+    metadata:
+      labels: {app: filebeat}
+    spec:
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: filebeat
+          image: docker.elastic.co/beats/filebeat:8.17.0
+          args: ['-e', '--strict.perms=false']
+          securityContext:
+            runAsUser: 0
+          env:
+            - name: ELASTICSEARCH_URL
+              value: 'http://ELASTICSEARCH_IP:9200'
+          resources:
+            requests: {cpu: 100m, memory: 100Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          volumeMounts:
+            - {name: config, mountPath: /usr/share/filebeat/filebeat.yml, subPath: filebeat.yml, readOnly: true}
+            - {name: logs, mountPath: /var/log, readOnly: true}
+            - {name: data, mountPath: /usr/share/filebeat/data}
+      volumes:
+        - name: config
+          configMap: {name: filebeat}
+        - name: logs
+          hostPath: {path: /var/log}
+        - name: data
+          hostPath: {path: /var/lib/filebeat-devops, type: DirectoryOrCreate}
