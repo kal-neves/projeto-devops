@@ -1,4 +1,4 @@
-"""cria objetos do kibana usando a api local. execute após iniciar o kibana."""
+"""cria objetos pela api local após iniciar o kibana."""
 import json
 import urllib.request
 

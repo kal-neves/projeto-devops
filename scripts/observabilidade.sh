@@ -7,4 +7,5 @@ ip=$(docker inspect -f '{{(index .NetworkSettings.Networks "kind").IPAddress}}' 
 test -n "$ip"
 kubectl --context kind-devops create namespace devops --dry-run=client -o yaml | kubectl --context kind-devops apply -f -
 sed "s/ELASTICSEARCH_IP/$ip/g" observabilidade/filebeat.yaml | kubectl --context kind-devops apply -f -
+kubectl --context kind-devops -n devops rollout restart daemonset/filebeat
 kubectl --context kind-devops -n devops rollout status daemonset/filebeat --timeout=180s

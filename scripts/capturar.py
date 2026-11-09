@@ -1,4 +1,4 @@
-"""captura uma página real no navegador: url e arquivo de saída."""
+"""captura uma página no navegador usando a url e o arquivo de saída."""
 import sys
 from playwright.sync_api import sync_playwright
 with sync_playwright() as p:
