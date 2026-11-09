@@ -24,6 +24,10 @@ data:
                 not:
                   equals:
                     service: devops
+          - rename:
+              fields:
+                - from: service
+                  to: service.name
     setup.ilm.enabled: false
     setup.template.name: devops
     setup.template.pattern: devops-*
